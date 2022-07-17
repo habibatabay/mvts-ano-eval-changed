@@ -277,7 +277,7 @@ if __name__ == '__main__':
     train_modes = ['singlepass', 'multipass', 'pretrain']
     np.random.seed(0)
     dataset_name, folder_idx, feature_type = datasets[1], 1, feature_types[0]
-    model_name, distr_name, mode = model_names[-3], distr_names[1], train_modes[-1]
+    model_name, distr_name, mode = model_names[0], distr_names[1], train_modes[0]
     # experiment_on_folder(dataset_name, model_name, folder_idx, feature_type=feature_type, score_distr_name=distr_name,mode=mode)
     # experiments_on_dataset(dataset_name, model_name, feature_type, distr_name, mode)
-    run_all_experiments(dataset_name,model_names, distr_name, mode)
+    run_all_experiments(dataset_name,model_names[1:], distr_name, mode)
