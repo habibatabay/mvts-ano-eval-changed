@@ -271,13 +271,11 @@ def run_all_experiments(dataset_name, model_names, distr_name, mode):
 if __name__ == '__main__':
     datasets = ['edBB', 'MyDataset']
     feature_types = ['original','array', 'angle_distance', 'angle', 'distance']
-    model_names = ['AutoEncoder', 'LSTMED', 'VAE_LSTM','UnivarAutoEncoder','MSCRED', 'TcnED',  'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
+    model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'VAE_LSTM','MSCRED', 'TcnED',  'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
     distr_names = ['normalized_error', 'univar_gaussian']#, 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['singlepass', 'multipass', 'pretrain']
     np.random.seed(0)
-    dataset_name, folder_idx, feature_type = datasets[1], 1, feature_types[0]
-    model_name, distr_name, mode = model_names[0], distr_names[1], train_modes[0]
-    # experiment_on_folder(dataset_name, model_name, folder_idx, feature_type=feature_type, score_distr_name=distr_name,mode=mode)
-    # experiments_on_dataset(dataset_name, model_name, feature_type, distr_name, mode)
-    run_all_experiments(dataset_name,model_names[1:], distr_name, mode)
+   # experiment_on_folder(dataset_name, model_name, folder_idx, feature_type=feature_type, score_distr_name=distr_name,mode=mode)
+    experiments_on_dataset(datasets[1], model_names[0], feature_types[0], distr_names[1], train_modes[1])
+    # run_all_experiments(datasets[1],model_names[0:1], distr_names[1], train_modes[1])
