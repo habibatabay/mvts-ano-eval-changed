@@ -137,6 +137,8 @@ def test(dataset, feature_type):
 if __name__ == '__main__':
     # test('MyDataset','distance')
     # x, y = load_edBB_all('original','upper')  
-    x, y = load_data_partial('MyDataset',1,'array','full',1.0) 
+    for i in range(1,39):
+        print('loading folder',i)
+        x, y,xt,yt = load_data_partial('MyDataset',i,'array','full') 
     print('X:',x.shape,'y:',y.shape)
  

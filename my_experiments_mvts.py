@@ -11,6 +11,8 @@ import os
 from sklearn.metrics import recall_score
 import logging
 from src.datasets.dataset import get_events
+import torch
+import glob
 
 # Global configs
 body_parts = ['full', 'upper']
@@ -129,9 +131,18 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 
     features_dim = x_data.shape[1]
     out_dir=setup_out_dir(dataset_name, model_name, feature_type, folder_idx)
-    model = get_model(model_name,features_dim, out_dir=out_dir)
+    model = get_model(model_name,features_dim)
+    best_loss = None
     if pretrained_model != None:
         model = pretrained_model
+        saved_models= glob.glob(setup_out_dir('edBB',model_name, feature_type) + 'trained_model_*_.pt')[0]
+        best_loss = np.float(saved_models[0].split('_')[-1])
+    else:
+        saved_models = glob.glob(out_dir + 'trained_model_*_.pt')
+        if len(saved_models)>0:
+            if hasattr(model, 'torch_save') and model.torch_save == True:
+                model.model = torch.load(saved_models[0], model.device)
+                
 
     x_seqs = get_sub_seqs(x_data.values, seq_len=sequence_length)
     y_seqs = np.array([1 if sum(y_data.iloc[i:i + sequence_length])>0 else 0 for i in range(len(x_seqs))])
@@ -144,7 +155,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
     i = 1
     x_train = None
     results = []
-    best_loss = None
+    
     while  True:
         if x_train is None:
             n_train = int(len(x_seqs) * train_ratio)
@@ -162,6 +173,10 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             y_train = y_train[:n_train]
             x_train_best = x_seqs[:n_train]
             y_train_best = y_seqs[:n_train]
+            if model.model == None:
+                best_val_loss = model.fit_sequences(x_train, x_val)
+                if hasattr(model,'torch_save') and  model.torch_save == True:
+                    torch.save(model.model, out_dir+f'trained_model_{best_val_loss}_.pt')
 
         else:
             n_train = int(len(x_seqs) * select_ratio)
@@ -175,14 +190,10 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             # y_train = y_seqs[:n_train]
             x_test = x_seqs[n_train:]
             y_test = y_seqs[n_train:]
+            best_val_loss = model.fit_sequences(x_train, x_val)
        
         if mode != 'multipass':
             break
-        
-            
-
-        # best_val_loss, model_changed = model.fit_sequences(x_train, x_val)
-        best_val_loss = model.fit_sequences(x_train, x_val)
         model_changed = False
         if best_loss is None or best_loss > best_val_loss:
             print(f'model improved to loss: {best_val_loss:0.5f}')
@@ -204,10 +215,10 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 
         i += 1
            
-    if mode != 'pretrain':
-        best_val_loss = model.fit_sequences(x_train_best , x_val)
-    else:
-        best_val_loss = 0.0
+    # if mode != 'pretrain':
+    #     best_val_loss = model.fit_sequences(x_train_best , x_val)
+    # else:
+    #     best_val_loss = 0.0
         
     test_preds = model.predict_sequences(x_test_best )
     train_preds = model.predict_sequences(x_train_best )
@@ -220,7 +231,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             train_scores, test_scores = train_preds['score_t'], test_preds['score_t']
     test_scores = test_scores[sequence_length-1:]
     aps, auroc, acc = get_results(y_test_best , test_scores, top_k= top_k, print_results=False)
-    results.append(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}, Best val:{best_val_loss:0.5f}')
+    results.append(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}')
 
     print(*results)
     return aps, auroc, acc
@@ -228,11 +239,19 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='singlepass'):
     pretrained_model = None
     if mode == 'pretrain':
-        print('pre-training on edBB...')
         x_train, _ = load_edBB_all(feature_type, body_part)
         features_dim = x_train.shape[1]
-        pretrained_model = get_model(model_name, features_dim, out_dir=setup_out_dir('edBB',model_name, feature_type))
-        pretrained_model.fit(x_train)
+        pretrained_model = get_model(model_name, features_dim)
+        saved_models= glob.glob(setup_out_dir('edBB',model_name, feature_type) + 'trained_model_*_.pt')
+        if  len(saved_models) > 0:
+            print('loading pre-trained model on edBB...')
+            pretrained_model.model = torch.load(saved_models[0], pretrained_model.device)
+        else:
+            print('pre-training model on edBB...')
+            pretrained_score = pretrained_model.fit(x_train)
+            if hasattr(pretrained_model,'torch_save') and  pretrained_model.torch_save == True:
+                print('saving pre-trained model...')
+                torch.save(pretrained_model.model,setup_out_dir('edBB',model_name, feature_type) + f'trained_model_{pretrained_score}_.pt')
 
     n=38
     if dataset_name == 'MyDataset':
@@ -276,6 +295,6 @@ if __name__ == '__main__':
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['singlepass', 'multipass', 'pretrain']
     np.random.seed(0)
-   # experiment_on_folder(dataset_name, model_name, folder_idx, feature_type=feature_type, score_distr_name=distr_name,mode=mode)
-    experiments_on_dataset(datasets[1], model_names[0], feature_types[0], distr_names[1], train_modes[1])
-    # run_all_experiments(datasets[1],model_names[0:1], distr_names[1], train_modes[1])
+    experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[0])
+    # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[2])
+    # run_all_experiments(datasets[1],model_names, distr_names[1], train_modes[0])
