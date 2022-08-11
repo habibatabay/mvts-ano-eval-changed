@@ -140,5 +140,6 @@ if __name__ == '__main__':
     for i in range(1,39):
         print('loading folder',i)
         x, y,xt,yt = load_data_partial('MyDataset',i,'array','full') 
+        print('test size:',len(xt),'anomaly labels:',sum(yt))
     print('X:',x.shape,'y:',y.shape)
  
