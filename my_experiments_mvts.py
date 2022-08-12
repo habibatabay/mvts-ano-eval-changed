@@ -221,10 +221,26 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 
         i += 1
            
-    # if mode != 'pretrain':
-    #     best_val_loss = model.fit_sequences(x_train_best , x_val)
-    # else:
-    #     best_val_loss = 0.0
+    if mode == 'combined':
+        pre_test_preds = pretrained_model.predict_sequences(x_test )
+        pre_train_preds = pretrained_model.predict_sequences(x_train )
+        if pre_test_preds['score_t'] is None:
+            pre_train_scores, pre_test_scores = get_fitted_scores(pre_train_preds['error_tc'], pre_test_preds['error_tc'])  
+        else:
+            pre_train_scores, pre_test_scores = pre_train_preds['score_t'], pre_test_preds['score_t']
+
+        train_scores = (train_scores + pre_train_scores) / 2        
+        test_scores = (test_scores + pre_test_scores) / 2   
+
+        # test_scores = test_scores[sequence_length-1:]
+        # pre_test_scores = pre_test_scores[sequence_length-1:]
+
+        # sort_idx = np.argsort(test_scores)
+        # pre_sort_idx = np.argsort(pre_test_scores)
+        # i = 1
+        # shared_idx = list(set(sort_idx[-top_k:]).intersection(pre_sort_idx[-top_k:]))
+        # test_scores = test_scores[shared_idx]
+        # y_test = y_test[shared_idx]
         
     test_preds = model.predict_sequences(x_test_best )
     train_preds = model.predict_sequences(x_train_best )
@@ -298,7 +314,7 @@ if __name__ == '__main__':
     model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'VAE_LSTM','MSCRED', 'TcnED',  'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
     distr_names = ['normalized_error', 'univar_gaussian']#, 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
-    train_modes = ['singlepass', 'multipass', 'pretrain']
+    train_modes = ['singlepass', 'multipass', 'pretrain', 'combined']
     np.random.seed(0)
     # experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[1])
     # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[2])
