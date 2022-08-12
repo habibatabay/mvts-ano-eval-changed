@@ -149,7 +149,9 @@ class UnivarAutoEncoder(Algorithm, PyTorchUtils):
             print("Training univariate model on channel number %i" % channel_num)
             args = (train_seqs[:,:,channel_num], val_seqs[:,:,channel_num], channel_num, self.out_dir, self.init_params)
             results.append(pool.apply_async(self.fit_one_channel_sequences, args=args))
+            # results.append(self.fit_one_channel_sequences(*args))
         return_values = [result.get() for result in results]
+        # return_values = results
         pool.close()
         pool.terminate()
         pool.join()
@@ -256,6 +258,7 @@ class UnivarAutoEncoder(Algorithm, PyTorchUtils):
         # data = X.values
         intermediate_scores = []
         outputs_array = []
+        self.additional_params["train_channels"] = sequences.shape[-1]
         for channel_num in range(self.additional_params["train_channels"]):
             chan_scores, chan_outputs = self.predict_one_channel_sequences(sequences[:,:, channel_num], channel_num,
                                                                  starts_discont=np.array([]))

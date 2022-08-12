@@ -131,17 +131,17 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 
     features_dim = x_data.shape[1]
     out_dir=setup_out_dir(dataset_name, model_name, feature_type, folder_idx)
-    model = get_model(model_name,features_dim)
+    model = get_model(model_name,features_dim, out_dir=out_dir)
     best_loss = None
     if pretrained_model != None:
         model = pretrained_model
-        saved_models= glob.glob(setup_out_dir('edBB',model_name, feature_type) + 'trained_model_*_.pt')[0]
-        best_loss = np.float(saved_models[0].split('_')[-1])
+
     else:
         saved_models = glob.glob(out_dir + 'trained_model_*_.pt')
         if len(saved_models)>0:
             if hasattr(model, 'torch_save') and model.torch_save == True:
                 model.model = torch.load(saved_models[0], model.device)
+                best_loss = np.float(os.path.basename (saved_models[0]).split('_')[2])
                 
 
     x_seqs = get_sub_seqs(x_data.values, seq_len=sequence_length)
@@ -163,50 +163,56 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             y_train = y_seqs[:n_train]
             x_test = x_seqs[n_train:]
             y_test = y_seqs[n_train:]
-            x_test_best = x_seqs[n_train:]
-            y_test_best = y_seqs[n_train:]
 
             n_train = int(len(x_train) * (1-val_ratio))
             x_val = x_train[n_train:]
             y_val = y_train[n_train:]
             x_train = x_train[:n_train]
             y_train = y_train[:n_train]
-            x_train_best = x_seqs[:n_train]
-            y_train_best = y_seqs[:n_train]
+
+            x_train_best = x_train.copy()
+            y_train_best = y_train.copy()
+            x_test_best = x_test.copy()
+            y_test_best = y_test.copy()
+            
             if model.model == None:
-                best_val_loss = model.fit_sequences(x_train, x_val)
+                best_loss = model.fit_sequences(x_train, x_val)
                 if hasattr(model,'torch_save') and  model.torch_save == True:
-                    torch.save(model.model, out_dir+f'trained_model_{best_val_loss}_.pt')
+                    torch.save(model.model, out_dir+f'trained_model_{best_loss}_.pt')
+            best_val_loss = best_loss
 
         else:
             n_train = int(len(x_seqs) * select_ratio)
-            x_test_best = x_test
-            y_test_best = y_test
-            x_train_best = x_train
-            y_train_best = y_train
+                
             x_train = np.concatenate((x_train, x_seqs[:n_train]), axis=0)
             y_train = np.concatenate((y_train, y_seqs[:n_train]), axis=0)
             # x_train = x_seqs[:n_train]
             # y_train = y_seqs[:n_train]
             x_test = x_seqs[n_train:]
             y_test = y_seqs[n_train:]
+            
             best_val_loss = model.fit_sequences(x_train, x_val)
        
         if mode != 'multipass':
             break
-        model_changed = False
-        if best_loss is None or best_loss > best_val_loss:
-            print(f'model improved to loss: {best_val_loss:0.5f}')
-            best_loss = best_val_loss
-            model_changed = True
-        else:
-            print(f'model not improved')
-            break
+        
+        print('step',i)
+        if i>1:
+            if best_loss > best_val_loss:
+                print(f'model improved to loss: {best_val_loss:0.5f}')
+                best_loss = best_val_loss
+                x_test_best = x_test.copy()
+                y_test_best = y_test.copy()
+                x_train_best = x_train.copy()
+                y_train_best = y_train.copy()
+            else:
+                print(f'model not improved')
+                break
 
         test_scores = test_model(model, x_train, x_test, score_distr_name)
 
         
-        if len(x_test) < top_k:
+        if len(x_test_best) < top_k:
             break
 
         test_idx = np.argsort(test_scores)
@@ -241,21 +247,20 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
     if mode == 'pretrain':
         x_train, _ = load_edBB_all(feature_type, body_part)
         features_dim = x_train.shape[1]
-        pretrained_model = get_model(model_name, features_dim)
-        saved_models= glob.glob(setup_out_dir('edBB',model_name, feature_type) + 'trained_model_*_.pt')
-        if  len(saved_models) > 0:
+        pretrained_model = get_model(model_name, features_dim, setup_out_dir('edBB',model_name, feature_type))
+        saved_model_dir= setup_out_dir('edBB',model_name, feature_type) + 'trained_model.pt'
+        if  os.path.exists(saved_model_dir):
             print('loading pre-trained model on edBB...')
-            pretrained_model.model = torch.load(saved_models[0], pretrained_model.device)
+            pretrained_model.model = torch.load(saved_model_dir, pretrained_model.device)
         else:
             print('pre-training model on edBB...')
-            pretrained_score = pretrained_model.fit(x_train)
+            pretrained_model.fit(x_train)
             if hasattr(pretrained_model,'torch_save') and  pretrained_model.torch_save == True:
                 print('saving pre-trained model...')
-                torch.save(pretrained_model.model,setup_out_dir('edBB',model_name, feature_type) + f'trained_model_{pretrained_score}_.pt')
+                torch.save(pretrained_model.model, saved_model_dir)
 
     n=38
-    if dataset_name == 'MyDataset':
-        n=12
+
     aps_avg=[]
     auroc_avg = []
     acc_avg = []
@@ -274,18 +279,18 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
     return aps_avg, auroc_avg, acc_avg
 
 
-def run_all_experiments(dataset_name, model_names, distr_name, mode):
+def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mode):
     metrics = ['Acc','APS', 'AUROC']
     results = pd.DataFrame(data=np.zeros((len(model_names),len(feature_types)*len(metrics))), 
                             columns=pd.MultiIndex.from_product([feature_types, metrics]), index=model_names)
 
+    time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
     for  model_name in model_names:
         for feature_name in feature_types:
             aps, roc, acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode)
             results.loc[model_name, feature_name] = [acc, aps, roc]
-    time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
-    results.to_csv(f'./my_results/mvts_results_{time_now}.csv')
-    print(f'results are saved to "results_{time_now}.csv"')
+            results.to_csv(f'./my_results/mvts_results_{mode}_{time_now}.csv')
+            print(f'results are saved to "results_{mode}_{time_now}.csv"')
 
 if __name__ == '__main__':
     datasets = ['edBB', 'MyDataset']
@@ -295,6 +300,6 @@ if __name__ == '__main__':
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['singlepass', 'multipass', 'pretrain']
     np.random.seed(0)
-    experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[0])
+    # experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[1])
     # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[2])
-    # run_all_experiments(datasets[1],model_names, distr_names[1], train_modes[0])
+    run_all_experiments(datasets[1], model_names, feature_types, distr_names[1], train_modes[2])
