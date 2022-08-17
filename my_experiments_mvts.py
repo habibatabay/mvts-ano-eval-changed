@@ -123,7 +123,7 @@ def test_model(model, x_train,  x_test, score_distr_name):
     return test_scores
 
 def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, 
-                        score_distr_name='', mode='singlepass',pretrained_model=None, thres_method='top_k_time'):
+                        score_distr_name='', mode='singlepass',pretrained_model=None):
 
     print(f'\n\nprocessing folder {folder_idx}...')
 
@@ -133,7 +133,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
     out_dir=setup_out_dir(dataset_name, model_name, feature_type, folder_idx)
     model = get_model(model_name,features_dim, out_dir=out_dir)
     best_loss = None
-    if pretrained_model != None:
+    if mode == 'pretrain':
         model = pretrained_model
 
     else:
@@ -206,13 +206,14 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
                 x_train_best = x_train.copy()
                 y_train_best = y_train.copy()
             else:
-                print(f'model not improved')
+                print(f'Exit with no model improvement')
                 break
 
         test_scores = test_model(model, x_train, x_test, score_distr_name)
 
         
         if len(x_test_best) < top_k:
+            print(f'Exit with top_k limitation')
             break
 
         test_idx = np.argsort(test_scores)
@@ -221,26 +222,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 
         i += 1
            
-    if mode == 'combined':
-        pre_test_preds = pretrained_model.predict_sequences(x_test )
-        pre_train_preds = pretrained_model.predict_sequences(x_train )
-        if pre_test_preds['score_t'] is None:
-            pre_train_scores, pre_test_scores = get_fitted_scores(pre_train_preds['error_tc'], pre_test_preds['error_tc'])  
-        else:
-            pre_train_scores, pre_test_scores = pre_train_preds['score_t'], pre_test_preds['score_t']
-
-        train_scores = (train_scores + pre_train_scores) / 2        
-        test_scores = (test_scores + pre_test_scores) / 2   
-
-        # test_scores = test_scores[sequence_length-1:]
-        # pre_test_scores = pre_test_scores[sequence_length-1:]
-
-        # sort_idx = np.argsort(test_scores)
-        # pre_sort_idx = np.argsort(pre_test_scores)
-        # i = 1
-        # shared_idx = list(set(sort_idx[-top_k:]).intersection(pre_sort_idx[-top_k:]))
-        # test_scores = test_scores[shared_idx]
-        # y_test = y_test[shared_idx]
+    
         
     test_preds = model.predict_sequences(x_test_best )
     train_preds = model.predict_sequences(x_train_best )
@@ -252,19 +234,45 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
         else:
             train_scores, test_scores = train_preds['score_t'], test_preds['score_t']
     test_scores = test_scores[sequence_length-1:]
+
+    if mode == 'combined':
+        pre_test_preds = pretrained_model.predict_sequences(x_test_best )
+        pre_train_preds = pretrained_model.predict_sequences(x_train_best )
+        if pre_test_preds['score_t'] is None:
+            pre_train_scores, pre_test_scores = get_fitted_scores(pre_train_preds['error_tc'], pre_test_preds['error_tc'])  
+        else:
+            pre_train_scores, pre_test_scores = pre_train_preds['score_t'], pre_test_preds['score_t']
+        
+        pre_test_scores = pre_test_scores[sequence_length-1:]
+
+        test_scores = (test_scores + pre_test_scores) / 2   
+        # test_scores = np.max((test_scores,pre_test_scores),axis=0)
+
+        
+
+        # sort_idx = np.argsort(test_scores)
+        # pre_sort_idx = np.argsort(pre_test_scores)
+        # i = 1
+        # shared_idx = list(set(sort_idx[-top_k:]).intersection(pre_sort_idx[-top_k:]))
+        # test_scores = test_scores[shared_idx]
+        # y_test = y_test[shared_idx]
+
     aps, auroc, acc = get_results(y_test_best , test_scores, top_k= top_k, print_results=False)
     results.append(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}')
+    with open('readme.txt', 'a') as f:
+        f.write('readme')
 
     print(*results)
     return aps, auroc, acc
 
-def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='singlepass'):
+def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='singlepass', save_results=False, exp_time=''):
     pretrained_model = None
-    if mode == 'pretrain':
+    if mode == 'pretrain' or mode == 'combined':
         x_train, _ = load_edBB_all(feature_type, body_part)
         features_dim = x_train.shape[1]
-        pretrained_model = get_model(model_name, features_dim, setup_out_dir('edBB',model_name, feature_type))
-        saved_model_dir= setup_out_dir('edBB',model_name, feature_type) + 'trained_model.pt'
+        out_dir = setup_out_dir('edBB',model_name, feature_type)
+        pretrained_model = get_model(model_name, features_dim, out_dir)
+        saved_model_dir= out_dir + 'trained_model.pt'
         if  os.path.exists(saved_model_dir):
             print('loading pre-trained model on edBB...')
             pretrained_model.model = torch.load(saved_model_dir, pretrained_model.device)
@@ -274,14 +282,24 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
             if hasattr(pretrained_model,'torch_save') and  pretrained_model.torch_save == True:
                 print('saving pre-trained model...')
                 torch.save(pretrained_model.model, saved_model_dir)
-
     n=38
+    time_now = exp_time if exp_time != '' else datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
+    metrics = ['Acc','APS', 'AUROC']
+    results_df = pd.DataFrame(data=np.zeros((n,len(metrics))), 
+                            columns=metrics, index=list(range(1,n+1)))
 
     aps_avg=[]
     auroc_avg = []
     acc_avg = []
     for folder_idx in range (1, n+1):
+ 
         aps,auroc, acc = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, distr_name, mode, pretrained_model)
+        if save_results:
+            results_df.loc[folder_idx] = [acc, aps, auroc]
+
+            results_df.to_csv(f'./my_results/intermediate/results_{dataset_name}_{mode}_{model_name}_{feature_type}_{time_now}.csv')
+            print(f'intermediate results are saved to "results_{dataset_name}_{mode}_{model_name}_{feature_type}_{time_now}.csv"')
+
         aps_avg.append(aps)
         auroc_avg.append(auroc)
         acc_avg.append(acc)
@@ -303,7 +321,7 @@ def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mo
     time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
     for  model_name in model_names:
         for feature_name in feature_types:
-            aps, roc, acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode)
+            aps, roc, acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode, save_results=True, exp_time=time_now)
             results.loc[model_name, feature_name] = [acc, aps, roc]
             results.to_csv(f'./my_results/mvts_results_{mode}_{time_now}.csv')
             print(f'results are saved to "results_{mode}_{time_now}.csv"')
@@ -311,11 +329,11 @@ def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mo
 if __name__ == '__main__':
     datasets = ['edBB', 'MyDataset']
     feature_types = ['original','array', 'angle_distance', 'angle', 'distance']
-    model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'VAE_LSTM','MSCRED', 'TcnED',  'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
+    model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'TcnED', 'VAE_LSTM','MSCRED', 'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
     distr_names = ['normalized_error', 'univar_gaussian']#, 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['singlepass', 'multipass', 'pretrain', 'combined']
     np.random.seed(0)
     # experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[1])
-    # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[2])
-    run_all_experiments(datasets[1], model_names, feature_types, distr_names[1], train_modes[2])
+    # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[0],True)
+    run_all_experiments(datasets[1], model_names[5:], feature_types, distr_names[1], train_modes[-1])
