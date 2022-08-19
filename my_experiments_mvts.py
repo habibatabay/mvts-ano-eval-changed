@@ -297,8 +297,8 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
         if save_results:
             results_df.loc[folder_idx] = [acc, aps, auroc]
 
-            results_df.to_csv(f'./my_results/intermediate/results_{dataset_name}_{mode}_{model_name}_{feature_type}_{time_now}.csv')
-            print(f'intermediate results are saved to "results_{dataset_name}_{mode}_{model_name}_{feature_type}_{time_now}.csv"')
+            results_df.to_csv(f'./my_results/intermediate/{time_now}_{mode}_{model_name}_{feature_type}.csv')
+            print(f'intermediate results are saved to "{time_now}_{mode}_{model_name}_{feature_type}.csv"')
 
         aps_avg.append(aps)
         auroc_avg.append(auroc)
@@ -323,8 +323,8 @@ def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mo
         for feature_name in feature_types:
             aps, roc, acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode, save_results=True, exp_time=time_now)
             results.loc[model_name, feature_name] = [acc, aps, roc]
-            results.to_csv(f'./my_results/mvts_results_{mode}_{time_now}.csv')
-            print(f'results are saved to "results_{mode}_{time_now}.csv"')
+            results.to_csv(f'./my_results/{time_now}_{mode}.csv')
+            print(f'results are saved to "{time_now}_{mode}.csv"')
 
 if __name__ == '__main__':
     datasets = ['edBB', 'MyDataset']
@@ -336,4 +336,4 @@ if __name__ == '__main__':
     np.random.seed(0)
     # experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[1])
     # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[0],True)
-    run_all_experiments(datasets[1], model_names[5:], feature_types, distr_names[1], train_modes[-1])
+    run_all_experiments(datasets[1], model_names[:5], feature_types, distr_names[1], train_modes[-1])
