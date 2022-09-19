@@ -1,4 +1,4 @@
-from my_data_functions import load_data_partial, get_results, load_edBB_all
+from my_data_functions import load_data_partial, get_results, load_edBB_all, get_seqs_events, get_events_accuracy
 from src.algorithms import AutoEncoder, LSTMED, UnivarAutoEncoder,VAE_LSTM, OmniAnoAlgo, MSCRED, TcnED
 from src.algorithms.algorithm_utils import get_sub_seqs
 import numpy as np
@@ -121,9 +121,9 @@ def test_model(model, x_train,  x_test, score_distr_name):
             train_scores, test_scores = train_preds['score_t'], test_preds['score_t']
     test_scores = test_scores[sequence_length-1:]
     return test_scores
-
+ 
 def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, 
-                        score_distr_name='', mode='singlepass',pretrained_model=None):
+                        score_distr_name='univar_gaussian', mode='singlepass',pretrained_model=None):
 
     print(f'\n\nprocessing folder {folder_idx}...')
 
@@ -146,6 +146,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
 
     x_seqs = get_sub_seqs(x_data.values, seq_len=sequence_length)
     y_seqs = np.array([1 if sum(y_data.iloc[i:i + sequence_length])>0 else 0 for i in range(len(x_seqs))])
+    e_seqs = get_seqs_events(y_data.values, sequence_length)
     train_ratio = 0.3
     select_ratio = 0.3
     top_ratio = 0.1
@@ -163,6 +164,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             y_train = y_seqs[:n_train]
             x_test = x_seqs[n_train:]
             y_test = y_seqs[n_train:]
+            e_test = e_seqs[n_train:]
 
             n_train = int(len(x_train) * (1-val_ratio))
             x_val = x_train[n_train:]
@@ -174,6 +176,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             y_train_best = y_train.copy()
             x_test_best = x_test.copy()
             y_test_best = y_test.copy()
+            e_test_best = e_test.copy()
             
             if model.model == None:
                 best_loss = model.fit_sequences(x_train, x_val)
@@ -190,6 +193,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
             # y_train = y_seqs[:n_train]
             x_test = x_seqs[n_train:]
             y_test = y_seqs[n_train:]
+            e_test = e_seqs[n_train:]
             
             best_val_loss = model.fit_sequences(x_train, x_val)
        
@@ -203,6 +207,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
                 best_loss = best_val_loss
                 x_test_best = x_test.copy()
                 y_test_best = y_test.copy()
+                e_test_best = e_test.copy()
                 x_train_best = x_train.copy()
                 y_train_best = y_train.copy()
             else:
@@ -219,11 +224,14 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
         test_idx = np.argsort(test_scores)
         x_seqs = x_test[test_idx]
         y_seqs = y_test[test_idx]
+        try:
+            e_seqs = np.array(e_test)[test_idx]
+        except:
+            e_seqs = e_test[test_idx]
 
         i += 1
            
-    
-        
+            
     test_preds = model.predict_sequences(x_test_best )
     train_preds = model.predict_sequences(x_train_best )
     if score_distr_name == 'normalized_error':
@@ -258,12 +266,13 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
         # y_test = y_test[shared_idx]
 
     aps, auroc, acc = get_results(y_test_best , test_scores, top_k= top_k, print_results=False)
-    results.append(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}')
+    e_acc = get_events_accuracy(e_test_best, test_scores, top_k)
+    results.append(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}, Event ACC={e_acc:0.3f}')
     with open('readme.txt', 'a') as f:
         f.write('readme')
 
     print(*results)
-    return aps, auroc, acc
+    return aps, auroc, acc, e_acc
 
 def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='singlepass', save_results=False, exp_time=''):
     pretrained_model = None
@@ -284,18 +293,19 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
                 torch.save(pretrained_model.model, saved_model_dir)
     n=38
     time_now = exp_time if exp_time != '' else datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
-    metrics = ['Acc','APS', 'AUROC']
+    metrics = ['Acc','APS', 'AUROC', 'EACC']
     results_df = pd.DataFrame(data=np.zeros((n,len(metrics))), 
                             columns=metrics, index=list(range(1,n+1)))
 
     aps_avg=[]
     auroc_avg = []
     acc_avg = []
+    e_acc_avg = []
     for folder_idx in range (1, n+1):
  
-        aps,auroc, acc = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, distr_name, mode, pretrained_model)
+        aps,auroc, acc, e_acc = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, distr_name, mode, pretrained_model)
         if save_results:
-            results_df.loc[folder_idx] = [acc, aps, auroc]
+            results_df.loc[folder_idx] = [acc, aps, auroc, e_acc]
 
             results_df.to_csv(f'./my_results/intermediate/{time_now}_{mode}_{model_name}_{feature_type}.csv')
             print(f'intermediate results are saved to "{time_now}_{mode}_{model_name}_{feature_type}.csv"')
@@ -303,26 +313,31 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
         aps_avg.append(aps)
         auroc_avg.append(auroc)
         acc_avg.append(acc)
+        e_acc_avg.append(e_acc)
 
     aps_avg = np.mean(aps_avg)
     auroc_avg = np.mean(auroc_avg)
     acc_avg = np.mean(acc_avg)
+    e_acc_avg = np.mean(e_acc_avg)
 
     print(f'\nAverage results on {dataset_name} of {model_name} by {feature_type} features:')
-    print(f"APS: {aps_avg:0.3f}, AUROC: {auroc_avg:0.3f}, ACC: {acc_avg:0.3f}\n")
-    return aps_avg, auroc_avg, acc_avg
+    print(f"APS: {aps_avg:0.3f}, AUROC: {auroc_avg:0.3f}, ACC: {acc_avg:0.3f}, EACC: {e_acc_avg:0.3f}\n")
+    return aps_avg, auroc_avg, acc_avg, e_acc_avg
 
 
-def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mode):
-    metrics = ['Acc','APS', 'AUROC']
+def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mode, time_label=''):
+    metrics = ['Acc','APS', 'AUROC','EACC']
     results = pd.DataFrame(data=np.zeros((len(model_names),len(feature_types)*len(metrics))), 
                             columns=pd.MultiIndex.from_product([feature_types, metrics]), index=model_names)
+    if time_label=='':
+        time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S') 
+    else:
+        time_now = time_label 
 
-    time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
     for  model_name in model_names:
         for feature_name in feature_types:
-            aps, roc, acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode, save_results=True, exp_time=time_now)
-            results.loc[model_name, feature_name] = [acc, aps, roc]
+            aps, roc, acc, e_acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode, save_results=True, exp_time=time_now)
+            results.loc[model_name, feature_name] = [acc, aps, roc, e_acc ]
             results.to_csv(f'./my_results/{time_now}_{mode}.csv')
             print(f'results are saved to "{time_now}_{mode}.csv"')
 
@@ -334,6 +349,8 @@ if __name__ == '__main__':
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['singlepass', 'multipass', 'pretrain', 'combined']
     np.random.seed(0)
-    # experiment_on_folder(datasets[1], model_names[1], folder_idx=1, feature_type=feature_types[3], score_distr_name=distr_names[1],mode=train_modes[1])
+    time_label=''
+    # time_label='2022_08_29_10_33_01'
+    # experiment_on_folder(datasets[1], model_names[1], folder_idx=17, feature_type=feature_types[2] ,mode=train_modes[0])
     # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[0],True)
-    run_all_experiments(datasets[1], model_names[:5], feature_types, distr_names[1], train_modes[-1])
+    run_all_experiments(datasets[1], model_names[-1:], feature_types[-1:], distr_names[1], train_modes[2], time_label)

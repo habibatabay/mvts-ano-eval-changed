@@ -129,17 +129,68 @@ def get_results(y_real, pred_scores, top_k, print_results=True):
         print(f"APS: {aps:0.3f}, AUROC: {roc:0.3f}, Top-{top_k} Accuracy: {acc:0.3f}")
     return aps, roc, acc
 
+def get_events_accuracy(events, scores, top_k):
+    true_events = set(events[0])
+    for i in range(1,len(events)):
+        for x in events[i]:
+            if x!=0:
+                true_events.add(x)
+
+    idxs = np.argsort(scores)
+    idxs = idxs[-top_k:]
+    e_pred = []
+    for i in range(len(idxs)):
+        e_pred.append(events[idxs[i]])
+
+    pred_events = set(e_pred[0])
+    for i in range(1,len(e_pred)):
+        for x in e_pred[i]:
+            if x!=0:
+                pred_events.add(x)
+    acc = len(pred_events) / len(true_events)
+    print('total events:',len(true_events), 'detected:',len(pred_events))
+    return acc
+
 def test(dataset, feature_type):
     x_train, y_train, x_test, y_test = load_data_partial(dataset,folder_idx=1,feature_type=feature_type,body_part="upper")
     print('loaded from',dataset,', features:',feature_type)        
     print(f'x_train: {x_train.shape}, y_train: {y_train.shape}, x_test: {x_test.shape}, y_test: {y_test.shape}')
 
+def get_seqs_events(y_data,sequence_length):
+    labels = []
+    new_label = 0
+    i = 0
+    while i < len(y_data):
+        while i < len(y_data) and y_data[i] == 0:
+            i += 1
+            labels.append(0)
+        if i >= len(y_data):
+            break
+        new_label += 1
+        while i < len(y_data) and y_data[i] == 1:
+            i += 1
+            labels.append(new_label)
+    # x_seqs = [y_data[i:i + sequence_length] for i in range(len(y_data)-sequence_length)]
+    y_seqs = [list(set(labels[i:i+sequence_length])) for i in range(len(labels)-sequence_length+1)]
+    for i in range(len(y_seqs)):
+        if  len(y_seqs[i]) > 1:
+            y_seqs[i].remove(0)
+    return y_seqs #, x_seqs
+
 if __name__ == '__main__':
     # test('MyDataset','distance')
     # x, y = load_edBB_all('original','upper')  
+
     for i in range(1,39):
         print('loading folder',i)
         x, y,xt,yt = load_data_partial('MyDataset',i,'array','full') 
         print('test size:',len(xt),'anomaly labels:',sum(yt))
     print('X:',x.shape,'y:',y.shape)
+
+    # y_data = np.array([0,0,0,1,1,1,0,1,1,1,0,0,1,1,0,0])
+    # seq_len = 8
+    # y, x = get_seqs_lbls(y_data, seq_len)
+    # print('y=\n',y)
+    # print('x=\n',x)
+
  
