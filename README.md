@@ -48,14 +48,14 @@ Located in /data/MyDataset
 
 Skeleton feature are extracted by Tensorflow Movnet and COCO structure
 
-## Data is 2D joint corrdinates of skeletons extracted from e-exam videos
+Data is 2D joint corrdinates of skeletons extracted from e-exam videos
 
-### Scripts:
-## my_experiments_mvts.py
+## Scripts:
+### my_experiments_mvts.py
 Contains my codes to train and test the methods
-## my_data_functions.py
+### my_data_functions.py
 Contains my codes to read data from files
-## my_extract_features.py
+### my_extract_features.py
 Contains my codes to extract features from the original features
 
 The "tested_algorithms" branch is the updated one
