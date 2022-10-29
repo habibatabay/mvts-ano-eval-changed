@@ -47,7 +47,7 @@ Located in /data/edBB
 ### My collected dataset
 Located in /data/MyDataset
 
-* Skeleton feature are extracted by Tensorflow Movnet and COCO structure
+Skeleton feature are extracted by Tensorflow Movnet and COCO structure
 
 ## Data is 2D joint corrdinates of skeletons extracted from e-exam videos
 
@@ -59,6 +59,6 @@ Contains my codes to read data from files
 ## my_extract_features.py
 Contains my codes to extract features from the original features
 
-## The "tested_algorithms" branch is the updated one
+The "tested_algorithms" branch is the updated one
 
 
