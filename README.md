@@ -3,12 +3,11 @@
 
 ## Original Authors:
 A. Garg, W. Zhang, J. Samaran, R. Savitha and C. -S. Foo, "An Evaluation of Anomaly Detection and Diagnosis in Multivariate Time Series," in IEEE Transactions on Neural Networks and Learning Systems, doi: 10.1109/TNNLS.2021.3105827.
-https://ieeexplore.ieee.org/document/9525836
+https://ieeexplore.ieee.org/document/9525836 Arxiv: https://arxiv.org/abs/2109.11428
 
 ### Related Publication:
 Agh Atabay, Habibollah and Hassanpour, Hamid, Electronic-Exam Video Summarization Using Skeleton-Based Anomaly Detection in Time-Series Data. Available at SSRN: https://ssrn.com/abstract=4221741 or http://dx.doi.org/10.2139/ssrn.4221741
 
-Arxiv: https://arxiv.org/abs/2109.11428
 
 ## Used Algorithms
 
