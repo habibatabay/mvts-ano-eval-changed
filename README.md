@@ -1,5 +1,5 @@
 
-# Skeleton-based Anomaly Detection in Time Series: An Evaluation of Deep Learning Methods on E-Exam Proctoring Data
+# Skeleton-Based Anomaly Detection in Time Series: An Evaluation of Deep Learning Methods on E-Exam Proctoring Data
 
 ## Original Authors:
 A. Garg, W. Zhang, J. Samaran, R. Savitha and C. -S. Foo, "An Evaluation of Anomaly Detection and Diagnosis in Multivariate Time Series," in IEEE Transactions on Neural Networks and Learning Systems, doi: 10.1109/TNNLS.2021.3105827.
@@ -34,11 +34,11 @@ Su, Ya, et al. "Robust Anomaly Detection for Multivariate Time Series through St
 Zhang, Chuxu, et al. "A Deep Neural Network for Unsupervised Anomaly Detection and Diagnosis in Multivariate Time Series Data." Proceedings of the AAAI Conference on Artificial Intelligence. 2019.
 
 ## Training schemes:
-### global
+### Global
 Traing on edBB and testing on the collected dataset
-### video-specific
+### Video-specific
 Training on the first 30% of each video and testing on the remaining
-### combined
+### Combined
 Combination of two methods by averaging the scores
 ## Data sets and how to get them
 
