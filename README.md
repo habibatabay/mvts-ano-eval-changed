@@ -6,7 +6,7 @@ A. Garg, W. Zhang, J. Samaran, R. Savitha and C. -S. Foo, "An Evaluation of Anom
 https://ieeexplore.ieee.org/document/9525836 Arxiv: https://arxiv.org/abs/2109.11428
 
 ### Related Publication:
-Agh Atabay, Habibollah and Hassanpour, Hamid, Electronic-Exam Video Summarization Using Skeleton-Based Anomaly Detection in Time-Series Data. Available at SSRN: https://ssrn.com/abstract=4221741 or http://dx.doi.org/10.2139/ssrn.4221741
+Agh Atabay, Habibollah and Hassanpour, Hamid, Semi-Supervised Skeleton-Based Anomaly Detection in Electronic-Exam Videos. Unpublished 
 
 
 ## Used Algorithms
