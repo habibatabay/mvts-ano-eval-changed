@@ -15,8 +15,6 @@ import torch
 import glob
 
 # Global configs
-body_parts = ['full', 'upper']
-body_part = body_parts[1]
 sequence_length = 15
 # num_epochs = 50
 num_epochs = 5
@@ -122,8 +120,8 @@ def test_model(model, x_train,  x_test, score_distr_name):
     test_scores = test_scores[sequence_length-1:]
     return test_scores
  
-def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, 
-                        score_distr_name='univar_gaussian', mode='singlepass',pretrained_model=None):
+def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, body_part='upper',
+                        score_distr_name='univar_gaussian', mode='video-specific',pretrained_model=None):
 
     print(f'\n\nprocessing folder {folder_idx}...')
 
@@ -133,7 +131,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
     out_dir=setup_out_dir(dataset_name, model_name, feature_type, folder_idx)
     model = get_model(model_name,features_dim, out_dir=out_dir)
     best_loss = None
-    if mode == 'pretrain':
+    if mode == 'global':
         model = pretrained_model
 
     else:
@@ -154,86 +152,28 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
     # top_k = np.sum(y_seqs)
     val_ratio = 0.2
     i = 1
-    x_train = None
-    results = []
+    x_train = None    
+
+    n_train = int(len(x_seqs) * train_ratio)
+    x_train = x_seqs[:n_train]
+    y_train = y_seqs[:n_train]
+    x_test = x_seqs[n_train:]
+    y_test = y_seqs[n_train:]
+    e_test = e_seqs[n_train:]
+
+    n_train = int(len(x_train) * (1-val_ratio))
+    x_val = x_train[n_train:]
+    y_val = y_train[n_train:]
+    x_train = x_train[:n_train]
+    y_train = y_train[:n_train]
     
-    while  True:
-        if x_train is None:
-            n_train = int(len(x_seqs) * train_ratio)
-            x_train = x_seqs[:n_train]
-            y_train = y_seqs[:n_train]
-            x_test = x_seqs[n_train:]
-            y_test = y_seqs[n_train:]
-            e_test = e_seqs[n_train:]
-
-            n_train = int(len(x_train) * (1-val_ratio))
-            x_val = x_train[n_train:]
-            y_val = y_train[n_train:]
-            x_train = x_train[:n_train]
-            y_train = y_train[:n_train]
-
-            x_train_best = x_train.copy()
-            y_train_best = y_train.copy()
-            x_test_best = x_test.copy()
-            y_test_best = y_test.copy()
-            e_test_best = e_test.copy()
-            
-            if model.model == None:
-                best_loss = model.fit_sequences(x_train, x_val)
-                if hasattr(model,'torch_save') and  model.torch_save == True:
-                    torch.save(model.model, out_dir+f'trained_model_{best_loss}_.pt')
-            best_val_loss = best_loss
-
-        else:
-            n_train = int(len(x_seqs) * select_ratio)
-                
-            x_train = np.concatenate((x_train, x_seqs[:n_train]), axis=0)
-            y_train = np.concatenate((y_train, y_seqs[:n_train]), axis=0)
-            # x_train = x_seqs[:n_train]
-            # y_train = y_seqs[:n_train]
-            x_test = x_seqs[n_train:]
-            y_test = y_seqs[n_train:]
-            e_test = e_seqs[n_train:]
-            
-            best_val_loss = model.fit_sequences(x_train, x_val)
-       
-        if mode != 'multipass':
-            break
-        
-        print('step',i)
-        if i>1:
-            if best_loss > best_val_loss:
-                print(f'model improved to loss: {best_val_loss:0.5f}')
-                best_loss = best_val_loss
-                x_test_best = x_test.copy()
-                y_test_best = y_test.copy()
-                e_test_best = e_test.copy()
-                x_train_best = x_train.copy()
-                y_train_best = y_train.copy()
-            else:
-                print(f'Exit with no model improvement')
-                break
-
-        test_scores = test_model(model, x_train, x_test, score_distr_name)
-
-        
-        if len(x_test_best) < top_k:
-            print(f'Exit with top_k limitation')
-            break
-
-        test_idx = np.argsort(test_scores)
-        x_seqs = x_test[test_idx]
-        y_seqs = y_test[test_idx]
-        try:
-            e_seqs = np.array(e_test)[test_idx]
-        except:
-            e_seqs = e_test[test_idx]
-
-        i += 1
-           
-            
-    test_preds = model.predict_sequences(x_test_best )
-    train_preds = model.predict_sequences(x_train_best )
+    if model.model == None:
+        best_loss = model.fit_sequences(x_train, x_val)
+        if hasattr(model,'torch_save') and  model.torch_save == True:
+            torch.save(model.model, out_dir+f'trained_model_{best_loss}_.pt')
+   
+    test_preds = model.predict_sequences(x_test )
+    train_preds = model.predict_sequences(x_train )
     if score_distr_name == 'normalized_error':
         test_scores = get_normalized_scores(train_preds['error_tc'], test_preds['error_tc'])
     else:
@@ -244,8 +184,8 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
     test_scores = test_scores[sequence_length-1:]
 
     if mode == 'combined':
-        pre_test_preds = pretrained_model.predict_sequences(x_test_best )
-        pre_train_preds = pretrained_model.predict_sequences(x_train_best )
+        pre_test_preds = pretrained_model.predict_sequences(x_test )
+        pre_train_preds = pretrained_model.predict_sequences(x_train )
         if pre_test_preds['score_t'] is None:
             pre_train_scores, pre_test_scores = get_fitted_scores(pre_train_preds['error_tc'], pre_test_preds['error_tc'])  
         else:
@@ -265,18 +205,17 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type,
         # test_scores = test_scores[shared_idx]
         # y_test = y_test[shared_idx]
 
-    aps, auroc, acc = get_results(y_test_best , test_scores, top_k= top_k, print_results=False)
-    e_acc = get_events_accuracy(e_test_best, test_scores, top_k)
-    results.append(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}, Event ACC={e_acc:0.3f}')
+    aps, auroc, acc = get_results(y_test , test_scores, top_k= top_k, print_results=False)
+    e_acc = get_events_accuracy(e_test, test_scores, top_k)
+    print(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}, Event ACC={e_acc:0.3f}')
     with open('readme.txt', 'a') as f:
         f.write('readme')
 
-    print(*results)
     return aps, auroc, acc, e_acc
 
-def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='singlepass', save_results=False, exp_time=''):
+def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='video-specific', save_results=False, exp_time=''):
     pretrained_model = None
-    if mode == 'pretrain' or mode == 'combined':
+    if mode == 'global' or mode == 'combined':
         x_train, _ = load_edBB_all(feature_type, body_part)
         features_dim = x_train.shape[1]
         out_dir = setup_out_dir('edBB',model_name, feature_type)
@@ -342,15 +281,18 @@ def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mo
             print(f'results are saved to "{time_now}_{mode}.csv"')
 
 if __name__ == '__main__':
-    datasets = ['edBB', 'MyDataset']
+    datasets = ['edBB', 'MyDataset','CombinedDataset']
     feature_types = ['original','array', 'angle_distance', 'angle', 'distance']
+    body_parts = ['full', 'upper','combined']
+    body_part = body_parts[2]
     model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'TcnED', 'VAE_LSTM','MSCRED', 'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
-    distr_names = ['normalized_error', 'univar_gaussian']#, 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
+    distr_name = 'univar_gaussian'#, 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
     thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
-    train_modes = ['singlepass', 'multipass', 'pretrain', 'combined']
+    train_modes = ['video-specific', 'global', 'combined']
     np.random.seed(0)
+    experiment_on_folder(datasets[-1], model_names[1], folder_idx=1, feature_type=feature_types[0] ,mode=train_modes[0])
+
     time_label=''
     # time_label='2022_08_29_10_33_01'
-    # experiment_on_folder(datasets[1], model_names[1], folder_idx=17, feature_type=feature_types[2] ,mode=train_modes[0])
     # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[0],True)
-    run_all_experiments(datasets[1], model_names[-1:], feature_types[-1:], distr_names[1], train_modes[2], time_label)
+    # run_all_experiments(datasets[1], model_names[-1:], feature_types[-1:], distr_name, train_modes[2], time_label)

@@ -22,4 +22,4 @@ gast==0.2.2
 git+https://github.com/korepwx/tfsnippet.git
 git+https://github.com/thu-ml/zhusuan.git
 # for ocsvm
-thundersvm-cuda10
+#thundersvm-cuda10

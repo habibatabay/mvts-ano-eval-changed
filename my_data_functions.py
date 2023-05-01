@@ -3,8 +3,6 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 import numpy as np
 import glob
 
-# update: 2022-03-30
-
 def load_edBB_all(feature_type, body_part, normals_only=True):
     n = 38
     x_all, y_all = [], []
@@ -21,37 +19,54 @@ def load_edBB_all(feature_type, body_part, normals_only=True):
         y_all = y_all[idxs]
     return pd.DataFrame(x_all), pd.DataFrame(y_all)
 
-def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=0.3, return_filenames=False):
+def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=0.3):
 
-    base_path = './data/edBB'
-    if dataset == 'MyDataset':
-        base_path = f'./data/MyDataset/{folder_idx:02d}'
-        # base_path = glob.glob(base_path)[0]
+    base_path = f'./data/{dataset}/{folder_idx:02d}'
+    if dataset == 'edBB':
+        base_path += f'./data/{dataset}'
 
     if feature_type == 'original':
         #load skeletons
-        coordinates_path = base_path + f'/coordinates_movnet/{folder_idx:02d}.csv'
-        if dataset == 'MyDataset':
-            coordinates_path = base_path + '/coordinates_movnet.csv'
-        time_series = pd.read_csv(coordinates_path, header=None)
-        time_series = time_series.iloc[:,1:]
+        coordinates_path = base_path + '/coordinates_movnet.csv'
+        if dataset == 'edBB':
+            coordinates_path = base_path + f'/coordinates_movnet/{folder_idx:02d}.csv'
+        time_series = pd.read_csv(coordinates_path, header=None, index_col=0)
+
         if body_part == 'upper':
             time_series = time_series.iloc[:,:22]
+        elif body_part == 'head':
+            time_series = time_series.iloc[:, :10]
+        elif body_part == 'left_hand':
+            time_series = time_series.iloc[:, [10, 11, 14, 15, 18, 19]]
+        elif body_part == 'right_hand':
+            time_series = time_series.iloc[:, [12, 13, 16, 17, 20, 21]]
+        elif body_part == 'left_wrist':
+            time_series = time_series.iloc[:, [18, 19]]
+        elif body_part == 'right_wrist':
+            time_series = time_series.iloc[:, [20, 21]]
+        elif body_part == 'combined':
+            rw = time_series.iloc[:, [20, 21]].set_axis([2,3],axis=1)
+            lw = time_series.iloc[:, [18, 19]].set_axis([4,5],axis=1)
+            le = time_series.iloc[:, [6, 7]].set_axis([0,1],axis=1)
+            re = time_series.iloc[:, [8, 9]].set_axis([0,1],axis=1)
+            n = time_series.iloc[:, [0, 1]].set_axis([0,1],axis=1)
+            h = (le+re) / 2
+            n = n - h
+            time_series = pd.concat([n,rw,lw], axis=1)
+
     elif feature_type == 'array':
-        features_path = base_path + f'/array_features/{folder_idx:02d}.csv'
-        if dataset == 'MyDataset':
-            features_path = base_path + f'/array_features.csv'
-        data = pd.read_csv(features_path, header=None)
-        data = data.iloc[:,1:]
-        time_series = data
+        features_path = base_path + f'/array_features.csv'
+        if dataset == 'edBB':
+            features_path = base_path + f'/array_features/{folder_idx:02d}.csv'
+        time_series = pd.read_csv(features_path, header=None, index_col=0)
         if body_part == 'upper':
             time_series = time_series.iloc[:, :22]
     else:
-        features_path = base_path + f'/angle_distance_features/{folder_idx:02d}.csv'
-        if dataset == 'MyDataset':
-            features_path = base_path + f'/angle_distance_features.csv'
-        data = pd.read_csv(features_path, header=None)
-        data = data.iloc[:,1:]
+        features_path = base_path + f'/angle_distance_features.csv'
+        if dataset == 'edBB':
+            features_path = base_path + f'/angle_distance_features/{folder_idx:02d}.csv'
+        data = pd.read_csv(features_path, header=None, index_col=0)
+        
         if feature_type == 'angle_distance':
             time_series = data
             if body_part == 'upper':
@@ -71,16 +86,15 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
             time_series = data.iloc[:,list(range(rem, data.shape[1], 2))]
             if body_part == 'upper':
                 time_series = time_series.iloc[:, :11]
+            elif body_part == 'head':
+                time_series = time_series.iloc[:, :4]
     
     #load labels
-    labels_path=base_path+f'/labels_movnet/{folder_idx:02d}.csv'
-    if dataset == 'MyDataset':
-        labels_path = base_path + '/labels.csv'
+    labels_path = base_path + '/labels.csv'
+    if dataset == 'edBB':
+        labels_path=base_path+f'/labels_movnet/{folder_idx:02d}.csv'
 
-    labels = pd.read_csv(labels_path, header=None)
-    if return_filenames:
-        filenames = labels.iloc[:,0]
-    labels = labels.iloc[:,1]
+    labels = pd.read_csv(labels_path, header=None, index_col=0)
 
     if train_ratio == 1.0 or train_ratio == 0.0:
         return time_series, labels
@@ -92,8 +106,7 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
     y_train = labels.iloc[:n_train]
     x_test = time_series.iloc[n_train:]
     y_test = labels.iloc[n_train:]
-    if return_filenames:
-        test_filenames = filenames.iloc[n_train:]
+ 
 
     if y_train.sum() > 0:
         idxs = np.where(y_train.to_numpy() == 1)[0]
@@ -110,9 +123,7 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
         # x_test.iloc[idxs2,:] = xs.values
         y_train.iloc[idxs] = 0
         y_test.iloc[idxs2] = 1
-        if return_filenames:
-            test_filenames.iloc[idxs2] = filenames.iloc[idxs]
-            return x_train, y_train, x_test, y_test, test_filenames
+
 
         print('some records of training data exchanged.')
 
