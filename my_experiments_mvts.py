@@ -1,4 +1,4 @@
-from my_data_functions import load_data_partial, get_results, load_edBB_all, get_seqs_events, get_events_accuracy
+from my_data_functions import load_data_partial, get_results, load_data_all, get_seqs_events, get_events_accuracy
 from src.algorithms import AutoEncoder, LSTMED, UnivarAutoEncoder,VAE_LSTM, OmniAnoAlgo, MSCRED, TcnED
 from src.algorithms.algorithm_utils import get_sub_seqs
 import numpy as np
@@ -126,6 +126,9 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
     print(f'\n\nprocessing folder {folder_idx}...')
 
     x_data, y_data = load_data_partial(dataset_name, folder_idx, feature_type, body_part, train_ratio=0.0)
+    y_data = y_data.values
+    y_data.shape = (-1,)
+
 
     features_dim = x_data.shape[1]
     out_dir=setup_out_dir(dataset_name, model_name, feature_type, folder_idx)
@@ -143,8 +146,8 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
                 
 
     x_seqs = get_sub_seqs(x_data.values, seq_len=sequence_length)
-    y_seqs = np.array([1 if sum(y_data.iloc[i:i + sequence_length])>0 else 0 for i in range(len(x_seqs))])
-    e_seqs = get_seqs_events(y_data.values, sequence_length)
+    y_seqs = np.array([1 if sum(y_data[i:i + sequence_length])>0 else 0 for i in range(len(x_seqs))])
+    e_seqs = get_seqs_events(y_data, sequence_length)
     train_ratio = 0.3
     select_ratio = 0.3
     top_ratio = 0.1
@@ -166,6 +169,8 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
     y_val = y_train[n_train:]
     x_train = x_train[:n_train]
     y_train = y_train[:n_train]
+
+
     
     if model.model == None:
         best_loss = model.fit_sequences(x_train, x_val)
@@ -213,24 +218,26 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
 
     return aps, auroc, acc, e_acc
 
-def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='normalized_error', mode='video-specific', save_results=False, exp_time=''):
+def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='univar_gaussian', mode='video-specific', save_results=False, exp_time=''):
     pretrained_model = None
     if mode == 'global' or mode == 'combined':
-        x_train, _ = load_edBB_all(feature_type, body_part)
+        x_train, _ = load_data_all(feature_type, body_part)
         features_dim = x_train.shape[1]
-        out_dir = setup_out_dir('edBB',model_name, feature_type)
+        out_dir = setup_out_dir(dataset_name,model_name, feature_type)
         pretrained_model = get_model(model_name, features_dim, out_dir)
         saved_model_dir= out_dir + 'trained_model.pt'
         if  os.path.exists(saved_model_dir):
-            print('loading pre-trained model on edBB...')
+            print('loading pre-trained model ...')
             pretrained_model.model = torch.load(saved_model_dir, pretrained_model.device)
         else:
-            print('pre-training model on edBB...')
+            print('pre-training model ...')
             pretrained_model.fit(x_train)
             if hasattr(pretrained_model,'torch_save') and  pretrained_model.torch_save == True:
                 print('saving pre-trained model...')
                 torch.save(pretrained_model.model, saved_model_dir)
     n=38
+    if dataset_name == 'CombinedDataset':
+        n = 91
     time_now = exp_time if exp_time != '' else datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
     metrics = ['Acc','APS', 'AUROC', 'EACC']
     results_df = pd.DataFrame(data=np.zeros((n,len(metrics))), 
@@ -264,7 +271,7 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='n
     return aps_avg, auroc_avg, acc_avg, e_acc_avg
 
 
-def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mode, time_label=''):
+def run_all_experiments(dataset_name, model_names, feature_types, mode, time_label=''):
     metrics = ['Acc','APS', 'AUROC','EACC']
     results = pd.DataFrame(data=np.zeros((len(model_names),len(feature_types)*len(metrics))), 
                             columns=pd.MultiIndex.from_product([feature_types, metrics]), index=model_names)
@@ -275,7 +282,7 @@ def run_all_experiments(dataset_name, model_names, feature_types, distr_name, mo
 
     for  model_name in model_names:
         for feature_name in feature_types:
-            aps, roc, acc, e_acc = experiments_on_dataset(dataset_name, model_name, feature_name, distr_name, mode, save_results=True, exp_time=time_now)
+            aps, roc, acc, e_acc = experiments_on_dataset(dataset_name, model_name, feature_name, mode, save_results=True, exp_time=time_now)
             results.loc[model_name, feature_name] = [acc, aps, roc, e_acc ]
             results.to_csv(f'./my_results/{time_now}_{mode}.csv')
             print(f'results are saved to "{time_now}_{mode}.csv"')
@@ -286,13 +293,13 @@ if __name__ == '__main__':
     body_parts = ['full', 'upper','combined']
     body_part = body_parts[2]
     model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'TcnED', 'VAE_LSTM','MSCRED', 'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
-    distr_name = 'univar_gaussian'#, 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
-    thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
+    # distr_names = ['univar_gaussian', 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
+    # thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['video-specific', 'global', 'combined']
     np.random.seed(0)
-    experiment_on_folder(datasets[-1], model_names[1], folder_idx=1, feature_type=feature_types[0] ,mode=train_modes[0])
+    # experiment_on_folder(datasets[-1], model_names[6], folder_idx=1, feature_type=feature_types[0] ,mode=train_modes[0])
 
     time_label=''
     # time_label='2022_08_29_10_33_01'
-    # experiments_on_dataset(datasets[1], model_names[1], feature_types[3], distr_names[1], train_modes[0],True)
-    # run_all_experiments(datasets[1], model_names[-1:], feature_types[-1:], distr_name, train_modes[2], time_label)
+    # experiments_on_dataset(datasets[-1], model_names[0], feature_types[0], train_modes[0],True)
+    run_all_experiments(datasets[-1], model_names, feature_types[0:1], train_modes[1], time_label)

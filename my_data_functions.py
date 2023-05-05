@@ -19,6 +19,19 @@ def load_edBB_all(feature_type, body_part, normals_only=True):
         y_all = y_all[idxs]
     return pd.DataFrame(x_all), pd.DataFrame(y_all)
 
+def load_data_all(feature_type, body_part):
+    n = 91
+    x_all, y_all = [], []
+    for folder_idx in range(1, n+1):
+        x_folder, y_folder,_ ,_ = load_data_partial('CombinedDataset', folder_idx, feature_type, body_part, train_ratio=0.3)
+        x_all.append(x_folder.to_numpy())
+        y_folder = y_folder.to_numpy().reshape((-1,1))
+        y_all.append(y_folder)
+    x_all = np.vstack(x_all)
+    y_all = np.vstack(y_all)
+    
+    return pd.DataFrame(x_all), pd.DataFrame(y_all)
+
 def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=0.3):
 
     base_path = f'./data/{dataset}/{folder_idx:02d}'
