@@ -43,14 +43,15 @@ class ConvLSTMCell(nn.Module):
 
     def init_hidden(self, batch_size, hidden, shape):
         if self.Wci is None:
-            self.Wci = nn.Parameter(torch.zeros(1, hidden, shape[0], shape[1])).cuda()
-            self.Wcf = nn.Parameter(torch.zeros(1, hidden, shape[0], shape[1])).cuda()
-            self.Wco = nn.Parameter(torch.zeros(1, hidden, shape[0], shape[1])).cuda()
+            self.Wci = nn.Parameter(torch.zeros(1, hidden, shape[0], shape[1]))#.cuda()
+            self.Wcf = nn.Parameter(torch.zeros(1, hidden, shape[0], shape[1]))#.cuda()
+            self.Wco = nn.Parameter(torch.zeros(1, hidden, shape[0], shape[1]))#.cuda()
         else:
             assert shape[0] == self.Wci.size()[2], 'Input Height Mismatched!'
             assert shape[1] == self.Wci.size()[3], 'Input Width Mismatched!'
-        return (Variable(torch.zeros(batch_size, hidden, shape[0], shape[1])).cuda(),
-                Variable(torch.zeros(batch_size, hidden, shape[0], shape[1])).cuda())
+        return (Variable(torch.zeros(batch_size, hidden, shape[0], shape[1])),#.cuda(),
+                Variable(torch.zeros(batch_size, hidden, shape[0], shape[1]))#.cuda()
+        )
 
 
 class ConvLSTM(nn.Module):
@@ -68,7 +69,7 @@ class ConvLSTM(nn.Module):
         self.flatten = nn.Flatten()
         self.alpha_i = None
         for i in range(self.num_layers):
-            cell = ConvLSTMCell(self.input_channels[i], self.hidden_channels[i], self.kernel_size).cuda()
+            cell = ConvLSTMCell(self.input_channels[i], self.hidden_channels[i], self.kernel_size)#.cuda()
             self._all_layers.append(cell)
 
     def forward(self, input):
