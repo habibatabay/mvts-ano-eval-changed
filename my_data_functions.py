@@ -1,7 +1,6 @@
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 import numpy as np
-import glob
 
 def load_edBB_all(feature_type, body_part, normals_only=True):
     n = 38
@@ -38,7 +37,7 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
     if dataset == 'edBB':
         base_path += f'./data/{dataset}'
 
-    if feature_type == 'original':
+    if feature_type == 'original' or feature_type == 'combined':
         #load skeletons
         coordinates_path = base_path + '/coordinates_movnet.csv'
         if dataset == 'edBB':
@@ -47,6 +46,20 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
 
         if body_part == 'upper':
             time_series = time_series.iloc[:,:22]
+            if feature_type == 'combined':
+                rw = time_series.iloc[:, [20, 21]]
+                rw.set_axis([2,3],axis=1,inplace=True)
+                lw = time_series.iloc[:, [18, 19]]
+                lw.set_axis([4,5],axis=1,inplace=True)
+                le = time_series.iloc[:, [6, 7]]
+                le.set_axis([0,1],axis=1,inplace=True)
+                re = time_series.iloc[:, [8, 9]]
+                re.set_axis([0,1],axis=1,inplace=True)
+                n = time_series.iloc[:, [0, 1]]
+                n.set_axis([0,1],axis=1,inplace=True)
+                h = (le+re) / 2
+                n = n - h
+                time_series = pd.concat([n,rw,lw], axis=1)
         elif body_part == 'head':
             time_series = time_series.iloc[:, :10]
         elif body_part == 'left_hand':
@@ -57,15 +70,7 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
             time_series = time_series.iloc[:, [18, 19]]
         elif body_part == 'right_wrist':
             time_series = time_series.iloc[:, [20, 21]]
-        elif body_part == 'combined':
-            rw = time_series.iloc[:, [20, 21]].set_axis([2,3],axis=1)
-            lw = time_series.iloc[:, [18, 19]].set_axis([4,5],axis=1)
-            le = time_series.iloc[:, [6, 7]].set_axis([0,1],axis=1)
-            re = time_series.iloc[:, [8, 9]].set_axis([0,1],axis=1)
-            n = time_series.iloc[:, [0, 1]].set_axis([0,1],axis=1)
-            h = (le+re) / 2
-            n = n - h
-            time_series = pd.concat([n,rw,lw], axis=1)
+        
 
     elif feature_type == 'array':
         features_path = base_path + f'/array_features.csv'
@@ -121,7 +126,7 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
     y_test = labels.iloc[n_train:]
  
 
-    if y_train.sum() > 0:
+    if np.sum(y_train.values) > 0:
         idxs = np.where(y_train.to_numpy() == 1)[0]
         idxs2 = np.where(y_test.to_numpy() == 0)[0][:len(idxs)]
         x_train2 = x_train.to_numpy()
@@ -205,11 +210,11 @@ if __name__ == '__main__':
     # test('MyDataset','distance')
     # x, y = load_edBB_all('original','upper')  
 
-    for i in range(1,39):
+    for i in range(1,92):
         print('loading folder',i)
-        x, y,xt,yt = load_data_partial('MyDataset',i,'array','full') 
-        print('test size:',len(xt),'anomaly labels:',sum(yt))
-    print('X:',x.shape,'y:',y.shape)
+        x, y,xt,yt = load_data_partial('CombinedDataset',i,'original','combined') 
+        # print('test size:',len(xt),'anomaly labels:',sum(y))
+        # print('X:',x.shape,'y:',y.shape)
 
     # y_data = np.array([0,0,0,1,1,1,0,1,1,1,0,0,1,1,0,0])
     # seq_len = 8

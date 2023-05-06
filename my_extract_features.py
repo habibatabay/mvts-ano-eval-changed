@@ -76,32 +76,32 @@ def get_features(coordinates, feature_type):
     p1 = coordinates[RWrist]
     features.append(get_angle_distance(p0, p1, features[RElbow_idx][0], feature_type))
 
-    p0 = coordinates[LShoulder]
-    p1 = coordinates[LHip]
-    features.append(get_angle_distance(p0, p1, features[LShoulder_idx][0], feature_type))
-    p0 = coordinates[RShoulder]
-    p1 = coordinates[RHip]
-    features.append(get_angle_distance(p0, p1, features[RShoulder_idx][0], feature_type))
-    p0 = coordinates[LHip]
-    p1 = coordinates[LKnee]
-    features.append(get_angle_distance(p0, p1, features[LHip_idx][0], feature_type))
-    p0 = coordinates[RHip]
-    p1 = coordinates[RKnee]
-    features.append(get_angle_distance(p0, p1, features[RHip_idx][0], feature_type))
-    p0 = coordinates[LKnee]
-    p1 = coordinates[LAnkle]
-    features.append(get_angle_distance(p0, p1, features[LKnee_idx][0], feature_type))
-    p0 = coordinates[RKnee]
-    p1 = coordinates[RAnkle]
-    features.append(get_angle_distance(p0, p1, features[RKnee_idx][0], feature_type))
+    # p0 = coordinates[LShoulder]
+    # p1 = coordinates[LHip]
+    # features.append(get_angle_distance(p0, p1, features[LShoulder_idx][0], feature_type))
+    # p0 = coordinates[RShoulder]
+    # p1 = coordinates[RHip]
+    # features.append(get_angle_distance(p0, p1, features[RShoulder_idx][0], feature_type))
+    # p0 = coordinates[LHip]
+    # p1 = coordinates[LKnee]
+    # features.append(get_angle_distance(p0, p1, features[LHip_idx][0], feature_type))
+    # p0 = coordinates[RHip]
+    # p1 = coordinates[RKnee]
+    # features.append(get_angle_distance(p0, p1, features[RHip_idx][0], feature_type))
+    # p0 = coordinates[LKnee]
+    # p1 = coordinates[LAnkle]
+    # features.append(get_angle_distance(p0, p1, features[LKnee_idx][0], feature_type))
+    # p0 = coordinates[RKnee]
+    # p1 = coordinates[RAnkle]
+    # features.append(get_angle_distance(p0, p1, features[RKnee_idx][0], feature_type))
 
     return features
 
 
-feature_types = ['angle_dist','array']
-type_idx = 1
-datasets_name = ['edBB', 'MyDataset']
-dataset_idx = 0
+feature_types = ['angle_distance','array']
+type_idx = 0
+datasets_name = ['edBB', 'MyDataset', 'CombinedDataset']
+dataset_idx = 2
 # base_path = f'E:/Atabay/Datasets/{datasets_name[dataset_idx]}/'
 base_path = f'data/{datasets_name[dataset_idx]}/'
 if datasets_name[dataset_idx] == 'edBB':
@@ -112,26 +112,25 @@ if datasets_name[dataset_idx] == 'edBB':
         features = coordinates.copy()
         n = len(coordinates)
         for j in range(n):
-            feat = np.array(get_features(coordinates.iloc[j,1:].to_numpy(), feature_types[type_idx]))
-            features.iloc[j,1:] = feat.reshape((-1,))
-        if feature_types[type_idx] == 'array':
-            features.to_csv(base_path+f'array_features/{i:02d}.csv', header=None, index=False)
-        else:
-            features.to_csv(base_path+f'angle_distance_features/{i:02d}.csv', header=None, index=False)
-elif datasets_name[dataset_idx] == 'MyDataset':
-    for i in range(1,13):
+            feat = np.array(get_features(coordinates.iloc[j].to_numpy(), feature_types[type_idx]))
+            features.iloc[j] = feat.reshape((-1,))
+        features.to_csv(base_path+f'{feature_types[type_idx]}_features/{i:02d}.csv', header=None)
+
+else:
+    n=38
+    if datasets_name[dataset_idx] == 'CombinedDataset':
+        n=91
+    for i in range(1,n+1):
         print(f'processing folder {i}')
         # folder_path = glob.glob(f'{base_path}{i:02d}*/')[0]
         folder_path = f'{base_path}{i:02d}/'
-        # coordinates = pd.read_csv(folder_path + f'coordinates_movnet/01.csv', header=None)
-        coordinates = pd.read_csv(folder_path + f'coordinates_movnet.csv', header=None)
+        coordinates = pd.read_csv(folder_path + f'coordinates_movnet.csv', header=None, index_col=0)
         features = coordinates.copy()
-        n = len(coordinates)
-        for j in range(n):
-            feat = np.array(get_features(coordinates.iloc[j,1:].to_numpy(), feature_types[type_idx]))
-            features.iloc[j,1:] = feat.reshape((-1,))
-        if feature_types[type_idx] == 'array':
-            features.to_csv(os.path.join(folder_path, 'array_features.csv'), header=None, index=False)
-        else:
-            features.to_csv(os.path.join(folder_path, 'angle_distance_features.csv'), header=None, index=False)
+        m = len(coordinates)
+        for j in range(m):
+            feat = np.array(get_features(coordinates.iloc[j].to_numpy(), feature_types[type_idx]))
+            features.iloc[j] = feat.reshape((-1,))
+
+        features.to_csv(os.path.join(folder_path, feature_types[type_idx]+'_features.csv'), header=None)
+        
 print('Done.')

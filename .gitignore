@@ -2,3 +2,4 @@ my_results/
 __pycache__/
 */__pycache__/
 my_trained_models/
+readme.txt
