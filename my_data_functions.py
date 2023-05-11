@@ -35,7 +35,7 @@ def load_data_partial(dataset, folder_idx, feature_type, body_part, train_ratio=
 
     base_path = f'./data/{dataset}/{folder_idx:02d}'
     if dataset == 'edBB':
-        base_path += f'./data/{dataset}'
+        base_path = f'./data/{dataset}'
 
     if feature_type == 'original' or feature_type == 'combined':
         #load skeletons
@@ -208,11 +208,14 @@ def get_seqs_events(y_data,sequence_length):
 
 if __name__ == '__main__':
     # test('MyDataset','distance')
-    # x, y = load_edBB_all('original','upper')  
+    x, y = load_edBB_all('original','upper')  
+    print('x:',x.shape)
+    x, y = load_data_all('original','upper')  
+    print('x:',x.shape)
 
-    for i in range(1,92):
-        print('loading folder',i)
-        x, y,xt,yt = load_data_partial('CombinedDataset',i,'original','combined') 
+    # for i in range(1,92):
+    #     print('loading folder',i)
+    #     x, y,xt,yt = load_data_partial('CombinedDataset',i,'original','combined') 
         # print('test size:',len(xt),'anomaly labels:',sum(y))
         # print('X:',x.shape,'y:',y.shape)
 

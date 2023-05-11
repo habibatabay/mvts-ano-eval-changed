@@ -121,7 +121,7 @@ def test_model(model, x_train,  x_test, score_distr_name):
     return test_scores
  
 def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, body_part='upper',
-                        score_distr_name='univar_gaussian', mode='video-specific',pretrained_model=None):
+                        score_distr_name='univar_gaussian', mode='video-specific',pretrained_model=None, load_saved=True):
 
     print(f'\n\nprocessing folder {folder_idx}...')
 
@@ -135,12 +135,14 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
     model = get_model(model_name,features_dim, out_dir=out_dir)
     best_loss = None
     if mode == 'global':
+        # input('using pretrained')
         model = pretrained_model
 
     else:
         saved_models = glob.glob(out_dir + 'trained_model_*_.pt')
         if len(saved_models)>0:
-            if hasattr(model, 'torch_save') and model.torch_save == True:
+            if load_saved==True and hasattr(model, 'torch_save') and model.torch_save == True:
+                # input('loading')
                 model.model = torch.load(saved_models[0], model.device)
                 best_loss = np.float(os.path.basename (saved_models[0]).split('_')[2])
                 
@@ -172,11 +174,12 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
 
 
     
-    if model.model == None:
+    if model.model == None and mode != 'global':
+        # input('fitting model')
         best_loss = model.fit_sequences(x_train, x_val)
         if hasattr(model,'torch_save') and  model.torch_save == True:
             torch.save(model.model, out_dir+f'trained_model_{best_loss}_.pt')
-   
+    
     test_preds = model.predict_sequences(x_test )
     train_preds = model.predict_sequences(x_train )
     if score_distr_name == 'normalized_error':
@@ -200,6 +203,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
 
         test_scores = (test_scores + pre_test_scores) / 2   
         # test_scores = np.max((test_scores,pre_test_scores),axis=0)
+        # test_scores = np.min((test_scores,pre_test_scores),axis=0)
 
         
 
@@ -218,7 +222,7 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
 
     return aps, auroc, acc, e_acc
 
-def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='univar_gaussian', mode='video-specific', save_results=False, exp_time=''):
+def experiments_on_dataset(dataset_name, model_name, feature_type, mode='video-specific', save_results=False, exp_time=''):
     pretrained_model = None
     if mode == 'global' or mode == 'combined':
         x_train, _ = load_data_all(feature_type, body_part)
@@ -249,7 +253,7 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, distr_name='u
     e_acc_avg = []
     for folder_idx in range (1, n+1):
  
-        aps,auroc, acc, e_acc = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, distr_name, mode, pretrained_model)
+        aps,auroc, acc, e_acc = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, mode=mode, pretrained_model=pretrained_model)
         if save_results:
             results_df.loc[folder_idx] = [acc, aps, auroc, e_acc]
 
@@ -282,24 +286,28 @@ def run_all_experiments(dataset_name, model_names, feature_types, mode, time_lab
 
     for  model_name in model_names:
         for feature_name in feature_types:
-            aps, roc, acc, e_acc = experiments_on_dataset(dataset_name, model_name, feature_name, mode, save_results=True, exp_time=time_now)
+            aps, roc, acc, e_acc = experiments_on_dataset(dataset_name, model_name, feature_name, mode, save_results=False, exp_time=time_now)
             results.loc[model_name, feature_name] = [acc, aps, roc, e_acc ]
             results.to_csv(f'./my_results/{time_now}_{mode}.csv')
             print(f'results are saved to "{time_now}_{mode}.csv"')
 
 if __name__ == '__main__':
     datasets = ['edBB', 'MyDataset','CombinedDataset']
-    feature_types = ['original','array', 'angle_distance', 'angle', 'distance']
-    body_parts = ['full', 'upper','combined']
-    body_part = body_parts[2]
+    feature_types = ['original','combined','array', 'angle_distance', 'angle', 'distance']
+    body_parts = ['full', 'upper']
+    body_part = body_parts[1]
     model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'TcnED', 'VAE_LSTM','MSCRED', 'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
     # distr_names = ['univar_gaussian', 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
     # thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
     train_modes = ['video-specific', 'global', 'combined']
     np.random.seed(0)
-    # experiment_on_folder(datasets[-1], model_names[6], folder_idx=1, feature_type=feature_types[0] ,mode=train_modes[0])
+    # experiment_on_folder(datasets[-1], model_names[0], folder_idx=1, feature_type=feature_types[0] ,mode=train_modes[0], load_saved=False)
 
     time_label=''
     # time_label='2022_08_29_10_33_01'
-    # experiments_on_dataset(datasets[-1], model_names[0], feature_types[0], train_modes[0],True)
-    run_all_experiments(datasets[-1], model_names, feature_types[0:1], train_modes[1], time_label)
+    # experiments_on_dataset(datasets[-1], model_names[3], feature_types[1], train_modes[0])
+    # run_all_experiments(datasets[-1], model_names[5:6], feature_types[4:6], train_modes[1], time_label)
+    # run_all_experiments(datasets[-1], model_names[6:7], feature_types, train_modes[1], time_label)
+    # run_all_experiments(datasets[-1], model_names[:-2], feature_types, train_modes[2], time_label)
+    # run_all_experiments(datasets[-1], model_names[3:4], feature_types[1:], train_modes[2], time_label)
+    run_all_experiments(datasets[-1], model_names[:-2], feature_types, train_modes[1], time_label)
