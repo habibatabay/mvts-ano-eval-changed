@@ -306,8 +306,5 @@ if __name__ == '__main__':
     time_label=''
     # time_label='2022_08_29_10_33_01'
     # experiments_on_dataset(datasets[-1], model_names[3], feature_types[1], train_modes[0])
-    # run_all_experiments(datasets[-1], model_names[5:6], feature_types[4:6], train_modes[1], time_label)
-    # run_all_experiments(datasets[-1], model_names[6:7], feature_types, train_modes[1], time_label)
-    # run_all_experiments(datasets[-1], model_names[:-2], feature_types, train_modes[2], time_label)
-    # run_all_experiments(datasets[-1], model_names[3:4], feature_types[1:], train_modes[2], time_label)
+
     run_all_experiments(datasets[-1], model_names[:-2], feature_types, train_modes[1], time_label)
