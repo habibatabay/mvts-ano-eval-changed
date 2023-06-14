@@ -1,5 +1,5 @@
 
-# Skeleton-Based Anomaly Detection in Time Series: An Evaluation of Deep Learning Methods on E-Exam Proctoring Data
+# Semi-Supervised Skeleton-Based Anomaly Detection in Electronic-Exam Videos a
 
 ## Original Authors:
 A. Garg, W. Zhang, J. Samaran, R. Savitha and C. -S. Foo, "An Evaluation of Anomaly Detection and Diagnosis in Multivariate Time Series," in IEEE Transactions on Neural Networks and Learning Systems, doi: 10.1109/TNNLS.2021.3105827.
@@ -34,21 +34,23 @@ Zhang, Chuxu, et al. "A Deep Neural Network for Unsupervised Anomaly Detection a
 
 ## Training schemes:
 ### Global
-Traing on edBB and testing on the collected dataset
+Training on the first 30% of all videos and testing on the collected dataset
 ### Video-specific
-Training on the first 30% of each video and testing on the remaining
+Training on the first 30% of each video and testing on the remaining part of the same video
 ### Combined
 Combination of two methods by averaging the scores
 ## Data sets and how to get them
 
 ### edBB
 Located in /data/edBB
-### My collected dataset
-Located in /data/MyDataset
+### My collected dataset: the preliminary version
+Located in /data/MyDataset 
+### My collected dataset: the complete version
+Located in /data/CombinedDataset 
 
-Skeleton feature are extracted by Tensorflow Movnet and COCO structure
+Skeleton features are extracted by Tensorflow Movnet and COCO structure
 
-Data is 2D joint corrdinates of skeletons extracted from e-exam videos
+Data is 2D joint coordinates of skeletons extracted from e-exam videos
 
 ## Scripts:
 ### my_experiments_mvts.py
