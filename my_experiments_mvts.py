@@ -1,4 +1,4 @@
-from my_data_functions import load_data_partial, get_results, load_data_all, get_seqs_events, get_events_accuracy
+from my_data_functions import load_data_partial, get_results, load_data_all, get_seqs_events, classify_scores
 from src.algorithms import AutoEncoder, LSTMED, UnivarAutoEncoder,VAE_LSTM, OmniAnoAlgo, MSCRED, TcnED
 from src.algorithms.algorithm_utils import get_sub_seqs
 import numpy as np
@@ -39,25 +39,14 @@ def get_fitted_scores(error_tc_train, error_tc_test, distr_name='univar_gaussian
                                        drop_set=set([]), logcdf=True)
     return score_t_train, score_t_test
 
-def collect_results(score_t_train, score_t_test, y_test, thres_method='tail_prob'):
-    test_anom_frac = (np.sum(y_test)) / len(y_test)
-    true_events = get_events(y_test)
-    logger = None
-    composite_best_f1 = True
-    thres_config_dict = {'tail_prob':{"tail_prob": 4}}
-    logger = logging.getLogger('test')
-    opt_thres, pred_labels, avg_prec, auroc = threshold_and_predict(score_t_test, y_test, true_events=true_events,
-                                                                        logger=logger,
-                                                                        test_anom_frac=test_anom_frac,
-                                                                        thres_method=thres_method,
-                                                                        point_adjust=False,
-                                                                        score_t_train=score_t_train,
-                                                                        thres_config_dict=thres_config_dict,
-                                                                        return_auc=True,
-                                                                        composite_best_f1=composite_best_f1)
-    acc = recall_score(y_test, pred_labels,labels=[1])
-    print(f"APS: {avg_prec:0.3f}, AUROC: {auroc:0.3f}, {thres_method} ACC: {acc:0.3f}")
-    return avg_prec, auroc, acc
+def collect_results(y_true, y_pred):
+    aps, auroc, _ = get_results(y_true , y_pred, top_k= 0, print_results=False)
+    result = classify_scores(y_pred, y_true, method='pr')
+    p_aps, r_aps = result['1']['precision'], result['1']['recall']
+    result = classify_scores(y_pred, y_true, method='roc')
+    p_roc, r_roc = result['1']['precision'], result['1']['recall']
+    print(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, Pre APS={p_aps:0.3f}, Rec APS={r_aps:0.3f}, Pre ROC={p_roc:0.3f}, Rec ROC={r_roc:0.3f}')
+    return [aps, auroc, p_aps, r_aps, p_roc, r_roc]
 
 def setup_out_dir(dataset_name, model_name, feature_type, folder_idx='all'):
     path = f'my_trained_models/{dataset_name}/{model_name}/{feature_type}/{folder_idx}/'
@@ -121,9 +110,13 @@ def test_model(model, x_train,  x_test, score_distr_name):
     return test_scores
  
 def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, body_part='upper',
-                        score_distr_name='univar_gaussian', mode='video-specific',pretrained_model=None, load_saved=True):
+                        training_modes=['video-specific'],pretrained_model=None, load_saved=True):
 
     print(f'\n\nprocessing folder {folder_idx}...')
+
+    if pretrained_model is None and 'video-specific' in training_modes and len(training_modes) == 1:
+        assert False
+
 
     x_data, y_data = load_data_partial(dataset_name, folder_idx, feature_type, body_part, train_ratio=0.0)
     y_data = y_data.values
@@ -133,67 +126,39 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
     features_dim = x_data.shape[1]
     out_dir=setup_out_dir(dataset_name, model_name, feature_type, folder_idx)
     model = get_model(model_name,features_dim, out_dir=out_dir)
-    best_loss = None
-    if mode == 'global':
-        # input('using pretrained')
-        model = pretrained_model
 
-    else:
-        saved_models = glob.glob(out_dir + 'trained_model_*_.pt')
-        if len(saved_models)>0:
-            if load_saved==True and hasattr(model, 'torch_save') and model.torch_save == True:
-                # input('loading')
-                model.model = torch.load(saved_models[0], model.device)
-                best_loss = np.float(os.path.basename (saved_models[0]).split('_')[2])
-                
 
     x_seqs = get_sub_seqs(x_data.values, seq_len=sequence_length)
     y_seqs = np.array([1 if sum(y_data[i:i + sequence_length])>0 else 0 for i in range(len(x_seqs))])
     e_seqs = get_seqs_events(y_data, sequence_length)
     train_ratio = 0.3
-    select_ratio = 0.3
-    top_ratio = 0.1
-    top_k = int(len(x_seqs) * top_ratio)
+    # top_ratio = 0.1
+    # top_k = int(len(x_seqs) * top_ratio)
     # top_k = np.sum(y_seqs)
     val_ratio = 0.2
-    i = 1
-    x_train = None    
+    # i = 1
+    # x_train = None    
 
     n_train = int(len(x_seqs) * train_ratio)
     x_train = x_seqs[:n_train]
     y_train = y_seqs[:n_train]
     x_test = x_seqs[n_train:]
     y_test = y_seqs[n_train:]
-    e_test = e_seqs[n_train:]
+    # e_test = e_seqs[n_train:]
 
     n_train = int(len(x_train) * (1-val_ratio))
     x_val = x_train[n_train:]
-    y_val = y_train[n_train:]
+    # y_val = y_train[n_train:]
     x_train = x_train[:n_train]
     y_train = y_train[:n_train]
 
+    results_g = None
+    results_vs = None
+    results_c = None
 
-    
-    if model.model == None and mode != 'global':
-        # input('fitting model')
-        best_loss = model.fit_sequences(x_train, x_val)
-        if hasattr(model,'torch_save') and  model.torch_save == True:
-            torch.save(model.model, out_dir+f'trained_model_{best_loss}_.pt')
-    
-    test_preds = model.predict_sequences(x_test )
-    train_preds = model.predict_sequences(x_train )
-    if score_distr_name == 'normalized_error':
-        test_scores = get_normalized_scores(train_preds['error_tc'], test_preds['error_tc'])
-    else:
-        if test_preds['score_t'] is None:
-            train_scores, test_scores = get_fitted_scores(train_preds['error_tc'], test_preds['error_tc'])  
-        else:
-            train_scores, test_scores = train_preds['score_t'], test_preds['score_t']
-    test_scores = test_scores[sequence_length-1:]
-
-    if mode == 'combined':
+    if 'global' in training_modes:
         pre_test_preds = pretrained_model.predict_sequences(x_test )
-        pre_train_preds = pretrained_model.predict_sequences(x_train )
+        pre_train_preds = pretrained_model.predict_sequences(x_train)
         if pre_test_preds['score_t'] is None:
             pre_train_scores, pre_test_scores = get_fitted_scores(pre_train_preds['error_tc'], pre_test_preds['error_tc'])  
         else:
@@ -201,30 +166,62 @@ def experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, bod
         
         pre_test_scores = pre_test_scores[sequence_length-1:]
 
+        results_g = collect_results(y_test, pre_test_scores)
+        if len(training_modes) == 1:
+            return [results_g]
+
+    if model.model is None:
+        loaded = False
+        if load_saved==True and hasattr(model, 'torch_save') and model.torch_save == True:
+            saved_models = glob.glob(out_dir + 'trained_model*.pt')
+            if len(saved_models)>0:
+                # input('loading')
+                model.model = torch.load(saved_models[0], model.device)
+                loaded = True
+        if loaded == False:
+            model.fit_sequences(x_train, x_val)
+            if hasattr(model,'torch_save') and  model.torch_save == True:
+                torch.save(model.model, out_dir+f'trained_model.pt')
+    
+    
+    test_preds = model.predict_sequences(x_test )
+    train_preds = model.predict_sequences(x_train )
+    # if score_distr_name == 'normalized_error':
+    #     test_scores = get_normalized_scores(train_preds['error_tc'], test_preds['error_tc'])
+    # else: univar_gaussian
+    if test_preds['score_t'] is None:
+        train_scores, test_scores = get_fitted_scores(train_preds['error_tc'], test_preds['error_tc'])  
+    else:
+        train_scores, test_scores = train_preds['score_t'], test_preds['score_t']
+    test_scores = test_scores[sequence_length-1:]
+
+    results_vs = collect_results(y_test, test_scores)
+    results = []
+    if 'video-specific' in training_modes:
+        results.append(results_vs)
+
+    if 'combined' in training_modes:
         test_scores = (test_scores + pre_test_scores) / 2   
-        # test_scores = np.max((test_scores,pre_test_scores),axis=0)
-        # test_scores = np.min((test_scores,pre_test_scores),axis=0)
+        results_c = collect_results(y_test, test_scores)
+        results.append(results_c)
+    
+    if 'global' in training_modes:
+        results.append(results_g)
+    
+    return results
+    # aps, auroc, _ = get_results(y_test , test_scores, top_k= 0, print_results=False)
+    # result = classify_scores(test_scores, y_test, method='pr')
+    # p_aps, r_aps = result['1']['precision'], result['1']['recall']
+    # result = classify_scores(test_scores, y_test, method='roc')
+    # p_roc, r_roc = result['1']['precision'], result['1']['recall']
+    
+    # e_acc = get_events_accuracy(e_test, test_scores, top_k)
 
-        
+    # return aps, auroc, p_aps, r_aps, p_roc, r_roc
 
-        # sort_idx = np.argsort(test_scores)
-        # pre_sort_idx = np.argsort(pre_test_scores)
-        # i = 1
-        # shared_idx = list(set(sort_idx[-top_k:]).intersection(pre_sort_idx[-top_k:]))
-        # test_scores = test_scores[shared_idx]
-        # y_test = y_test[shared_idx]
-
-    aps, auroc, acc = get_results(y_test , test_scores, top_k= top_k, print_results=False)
-    e_acc = get_events_accuracy(e_test, test_scores, top_k)
-    print(f'\nfinal test : APS={aps:0.3f}, AUROC={auroc:0.3f}, ACC={acc:0.3f}, Event ACC={e_acc:0.3f}')
-    with open('readme.txt', 'a') as f:
-        f.write('readme')
-
-    return aps, auroc, acc, e_acc
-
-def experiments_on_dataset(dataset_name, model_name, feature_type, mode='video-specific', save_results=False, exp_time=''):
+def experiments_on_dataset(dataset_name:str, model_name:str, feature_type:str, training_modes:list, exp_time=''):
     pretrained_model = None
-    if mode == 'global' or mode == 'combined':
+    if 'global' in training_modes or 'combined' in training_modes:
         x_train, _ = load_data_all(feature_type, body_part)
         features_dim = x_train.shape[1]
         out_dir = setup_out_dir(dataset_name,model_name, feature_type)
@@ -242,54 +239,43 @@ def experiments_on_dataset(dataset_name, model_name, feature_type, mode='video-s
     n=38
     if dataset_name == 'CombinedDataset':
         n = 91
-    time_now = exp_time if exp_time != '' else datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
-    metrics = ['Acc','APS', 'AUROC', 'EACC']
-    results_df = pd.DataFrame(data=np.zeros((n,len(metrics))), 
-                            columns=metrics, index=list(range(1,n+1)))
+    # time_now = exp_time if exp_time != '' else datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
 
-    aps_avg=[]
-    auroc_avg = []
-    acc_avg = []
-    e_acc_avg = []
+    dataset_stats = [] 
     for folder_idx in range (1, n+1):
  
-        aps,auroc, acc, e_acc = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, mode=mode, pretrained_model=pretrained_model)
-        if save_results:
-            results_df.loc[folder_idx] = [acc, aps, auroc, e_acc]
+        folder_stats = experiment_on_folder(dataset_name, model_name, folder_idx, feature_type, training_modes=training_modes, pretrained_model=pretrained_model)
 
-            results_df.to_csv(f'./my_results/intermediate/{time_now}_{mode}_{model_name}_{feature_type}.csv')
-            print(f'intermediate results are saved to "{time_now}_{mode}_{model_name}_{feature_type}.csv"')
+        dataset_stats.append(folder_stats)
+    
+    dataset_stats = np.array(dataset_stats)
+    avg_stats = []
 
-        aps_avg.append(aps)
-        auroc_avg.append(auroc)
-        acc_avg.append(acc)
-        e_acc_avg.append(e_acc)
-
-    aps_avg = np.mean(aps_avg)
-    auroc_avg = np.mean(auroc_avg)
-    acc_avg = np.mean(acc_avg)
-    e_acc_avg = np.mean(e_acc_avg)
-
-    print(f'\nAverage results on {dataset_name} of {model_name} by {feature_type} features:')
-    print(f"APS: {aps_avg:0.3f}, AUROC: {auroc_avg:0.3f}, ACC: {acc_avg:0.3f}, EACC: {e_acc_avg:0.3f}\n")
-    return aps_avg, auroc_avg, acc_avg, e_acc_avg
+    for i in range(len(training_modes)):
+        stats = dataset_stats[:,i]
+        avg_stats.append(np.average(stats, axis=0))
+        print(f'\nAverage results on {model_name} by {feature_type} features:')
+        print(f"APS: {avg_stats[i][0]:0.3f}, AUC: {avg_stats[i][1]:0.3f}, Pre APS: {avg_stats[i][2]:0.3f}, Rec APS: {avg_stats[i][3]:0.3f}, Pre AUC: {avg_stats[i][4]:0.3f}, Rec AUC: {avg_stats[i][5]:0.3f}\n")
+    return avg_stats
 
 
-def run_all_experiments(dataset_name, model_names, feature_types, mode, time_label=''):
-    metrics = ['Acc','APS', 'AUROC','EACC']
-    results = pd.DataFrame(data=np.zeros((len(model_names),len(feature_types)*len(metrics))), 
-                            columns=pd.MultiIndex.from_product([feature_types, metrics]), index=model_names)
-    if time_label=='':
-        time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S') 
-    else:
-        time_now = time_label 
+def run_all_experiments(dataset_name, model_names, feature_types, training_modes):
+    metrics = ['APS', 'AUC','PreAPS','RecAPS','PreAUC','RecAUC']
+    results = []
+    for i in range(len(training_modes)):
+        results.append(pd.DataFrame(data=np.zeros((len(model_names),len(feature_types)*len(metrics))), 
+                            columns=pd.MultiIndex.from_product([feature_types, metrics]), index=model_names))
+
+    time_now = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S') 
+
 
     for  model_name in model_names:
         for feature_name in feature_types:
-            aps, roc, acc, e_acc = experiments_on_dataset(dataset_name, model_name, feature_name, mode, save_results=False, exp_time=time_now)
-            results.loc[model_name, feature_name] = [acc, aps, roc, e_acc ]
-            results.to_csv(f'./my_results/{time_now}_{mode}.csv')
-            print(f'results are saved to "{time_now}_{mode}.csv"')
+            stats = experiments_on_dataset(dataset_name, model_name, feature_name, training_modes, exp_time=time_now)
+            for i in range(len(training_modes)):
+                results[i].loc[model_name, feature_name] = stats[i]
+                results[i].to_csv(f'./my_results/{time_now}_{training_modes[i]}.csv')
+                print(f'results are saved to "{time_now}_{training_modes[i]}.csv"')
 
 if __name__ == '__main__':
     datasets = ['edBB', 'MyDataset','CombinedDataset']
@@ -299,12 +285,11 @@ if __name__ == '__main__':
     model_names = ['UnivarAutoEncoder','AutoEncoder', 'LSTMED', 'TcnED', 'VAE_LSTM','MSCRED', 'OmniAnoAlgo']#, 'PcaRecons', 'RawSignalBaseline']
     # distr_names = ['univar_gaussian', 'univar_lognormal', 'univar_lognorm_add1_loc0', 'chi']
     # thresh_methods = ['top_k_time']#, 'best_f1_test', 'tail_prob']
-    train_modes = ['video-specific', 'global', 'combined']
+    train_modes = ['video-specific', 'global','combined']
     np.random.seed(0)
     # experiment_on_folder(datasets[-1], model_names[0], folder_idx=1, feature_type=feature_types[0] ,mode=train_modes[0], load_saved=False)
 
-    time_label=''
-    # time_label='2022_08_29_10_33_01'
+
     # experiments_on_dataset(datasets[-1], model_names[3], feature_types[1], train_modes[0])
 
-    run_all_experiments(datasets[-1], model_names[:-2], feature_types, train_modes[1], time_label)
+    run_all_experiments(datasets[-1], model_names[-2:], feature_types, train_modes)

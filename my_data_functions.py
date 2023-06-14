@@ -1,6 +1,8 @@
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 import numpy as np
+from sklearn.metrics import roc_curve, classification_report, precision_recall_curve 
+
 
 def load_edBB_all(feature_type, body_part, normals_only=True):
     n = 38
@@ -151,9 +153,11 @@ def get_results(y_real, pred_scores, top_k, print_results=True):
     aps = average_precision_score(y_real, pred_scores, pos_label=1)
     roc = roc_auc_score(y_real, pred_scores)
     idxs = np.argsort(pred_scores)
-    idxs = idxs[-top_k:]
-    y_pred = y_real[idxs]
-    acc = np.sum(y_pred) / top_k
+    acc=0
+    if top_k>0:
+        idxs = idxs[-top_k:]
+        y_pred = y_real[idxs]
+        acc = np.sum(y_pred) / top_k
     if print_results:
         print(f"APS: {aps:0.3f}, AUROC: {roc:0.3f}, Top-{top_k} Accuracy: {acc:0.3f}")
     return aps, roc, acc
@@ -205,6 +209,26 @@ def get_seqs_events(y_data,sequence_length):
         if  len(y_seqs[i]) > 1:
             y_seqs[i].remove(0)
     return y_seqs #, x_seqs
+
+def classify_scores(scores, labels, method='pr'):
+
+    if method == 'roc':
+        fpr, tpr, thresholds = roc_curve(labels, scores)
+        # Find the threshold that maximizes performance
+        optimal_idx = np.argmax(tpr - fpr)
+    else:
+        precision, recall, thresholds = precision_recall_curve(labels, scores)
+        f1_scores = 2 * (precision * recall) / (precision + recall)
+        f1_scores[np.isnan(f1_scores)] = 0
+        optimal_idx = np.argmax(f1_scores)
+
+    optimal_threshold = thresholds[optimal_idx]
+
+    # Classify test samples based on selected threshold
+    y_pred = (scores >= optimal_threshold).astype(int)
+    print('Results by ', method,':')
+    print(classification_report(labels,y_pred))
+    return classification_report(labels,y_pred, output_dict=True)
 
 if __name__ == '__main__':
     # test('MyDataset','distance')
